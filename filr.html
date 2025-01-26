@@ -1,0 +1,61 @@
+function togglePreviousRecordings() {
+    // If list is hidden or empty, show recordings
+    if (previousAudioListContainer.innerHTML.trim() === '') {
+        const currentWord = tracker.words[0];
+        const wordKey = currentWord.word;
+        
+        // Clear previous audio list
+        previousAudioListContainer.innerHTML = '';
+        
+        // Get completed modes in order
+        const completedModes = tracker.getCompletedModesInOrder();
+        
+        // If no recordings exist, show a message
+        if (completedModes.length === 0) {
+            previousAudioListContainer.innerHTML = 'No previous recordings found.';
+            return;
+        }
+
+        // Create an audio player for each completed mode's recording
+        completedModes.forEach(mode => {
+            const uniqueId = tracker.modeAudioFiles[wordKey]?.[mode];
+            
+            if (uniqueId) {
+                // Retrieve base64 audio from localStorage
+                const audioBase64 = localStorage.getItem(uniqueId);
+                
+                if (audioBase64) {
+                    // Create a container for each audio
+                    const audioContainer = document.createElement('div');
+                    
+                    // Create mode label with filename
+                    const modeLabel = document.createElement('strong');
+                    const fileName = `Audio_${mode}.wav`;
+                    modeLabel.textContent = `${mode} mode (${fileName}): `;
+                    
+                    // Create audio element
+                    const audioElement = document.createElement('audio');
+                    audioElement.src = audioBase64;
+                    audioElement.controls = true;
+                    
+                    // Append elements
+                    audioContainer.appendChild(modeLabel);
+                    audioContainer.appendChild(audioElement);
+                    
+                    previousAudioListContainer.appendChild(audioContainer);
+                }
+            }
+        });
+
+        // Update button text
+        showPreviousRecordingsBtn.textContent = 'Hide Recordings';
+    } 
+    // If list is visible, hide it
+    else {
+        previousAudioListContainer.innerHTML = '';
+        showPreviousRecordingsBtn.textContent = 'Play Previous Recordings';
+    }
+}
+
+// Event listener
+showPreviousRecordingsBtn.addEventListener('click', togglePreviousRecordings);

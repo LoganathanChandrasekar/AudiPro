@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Globalized Task Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .word-box { border: 1px solid #ddd; padding: 10px; margin: 5px 0; text-align: center; }
+        .completed { background-color: #e6ffe6; border-color: green; }
+        .current { border-color: blue; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Globalized Task Tracker</h1>
+    <div id="word-boxes"></div>
+    <p id="status"></p>
+    <input id="task-id" placeholder="Enter Task ID" />
+    <button id="load-task">Load Task</button>
+    <button id="save-progress">Save Progress</button>
+
+    <!-- AWS SDK -->
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1180.0.min.js"></script>
+    <script>
+        // AWS Configuration
+        AWS.config.update({
+            accessKeyId: 'YOUR_ACCESS_KEY_ID', // Replace with your Access Key ID
+            secretAccessKey: 'YOUR_SECRET_ACCESS_KEY', // Replace with your Secret Access Key
+            region: 'YOUR_REGION' // e.g., 'us-east-1'
+        });
+
+        const dynamoDB = new AWS.DynamoDB.DocumentClient();
+        const TABLE_NAME = 'TaskProgress';
+
+        class TaskTracker {
+            constructor() {
+                this.taskID = null;
+                this.words = [{ word: "hello world", modes: ["fast", "normal", "slow"] }];
+                this.completedModes = {};
+            }
+
+            async loadTask(taskID) {
+                this.taskID = taskID;
+
+                try {
+                    const data = await dynamoDB.get({
+                        TableName: TABLE_NAME,
+                        Key: { TaskID: taskID }
+                    }).promise();
+
+                    if (data.Item) {
+                        this.completedModes = data.Item.CompletedModes || {};
+                        this.render();
+                    } else {
+                        alert("Task not found. Starting a new task.");
+                        this.completedModes = {};
+                        this.render();
+                    }
+                } catch (error) {
+                    console.error("Error loading task:", error);
+                    alert("Failed to load task.");
+                }
+            }
+
+            async saveTask(user) {
+                const params = {
+                    TableName: TABLE_NAME,
+                    Item: {
+                        TaskID: this.taskID,
+                        CompletedModes: this.completedModes,
+                        LastUpdatedBy: user,
+                        LastUpdatedTime: new Date().toISOString()
+                    }
+                };
+
+                try {
+                    await dynamoDB.put(params).promise();
+                    alert("Task progress saved!");
+                } catch (error) {
+                    console.error("Error saving task:", error);
+                    alert("Failed to save task.");
+                }
+            }
+
+            getNextMode() {
+                for (let mode of this.words[0].modes) {
+                    if (!this.completedModes[mode]) {
+                        return mode;
+                    }
+                }
+                return null;
+            }
+
+            completeMode(mode) {
+                this.completedModes[mode] = true;
+                this.render();
+            }
+
+            render() {
+                const container = document.getElementById("word-boxes");
+                container.innerHTML = "";
+                const nextMode = this.getNextMode();
+
+                for (let mode of this.words[0].modes) {
+                    const div = document.createElement("div");
+                    div.className = "word-box";
+                    if (this.completedModes[mode]) div.classList.add("completed");
+                    if (mode === nextMode) div.classList.add("current");
+                    div.textContent = `${this.words[0].word} - ${mode}`;
+                    container.appendChild(div);
+                }
+
+                document.getElementById("status").textContent = nextMode
+                    ? `Next Mode: ${nextMode}`
+                    : "All modes completed!";
+            }
+        }
+
+        const tracker = new TaskTracker();
+
+        document.getElementById("load-task").addEventListener("click", () => {
+            const taskID = document.getElementById("task-id").value.trim();
+            if (!taskID) return alert("Please enter a Task ID.");
+            tracker.loadTask(taskID);
+        });
+
+        document.getElementById("save-progress").addEventListener("click", () => {
+            const user = prompt("Enter your user name:");
+            if (!user) return alert("User name is required.");
+            tracker.saveTask(user);
+        });
+    </script>
+</body>
+</html>

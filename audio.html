@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Word Recording App</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        #word-boxes { display: flex; gap: 10px; margin-bottom: 20px; }
+        .word-box { 
+            border: 2px solid #ddd; 
+            padding: 10px; 
+            text-align: center; 
+            flex-grow: 1; 
+        }
+        .word-box.completed { 
+            background-color: #e6f3e6; 
+            border-color: green; 
+        }
+        .word-box.current { 
+            border-color: blue; 
+            font-weight: bold; 
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>Word Recording Tracker</h1>
+        <div id="word-boxes"></div>
+        <div id="word-display"></div>
+        <div id="mode-status"></div>
+        <button id="start-recording">Start Recording</button>
+        <button id="stop-recording" disabled>Stop Recording</button>
+        <button id="play-recording" disabled>Play Recording</button>
+        <button id="save-recording" disabled>Save Recording</button>
+    </div>
+
+    <script>
+        // Persistent State Management Class
+        class PersistentStateManager {
+            constructor(storageKey = 'wordRecordingState') {
+                this.storageKey = storageKey;
+            }
+
+            // Save state to localStorage or IndexedDB
+            saveState(state) {
+                try {
+                    // Prefer IndexedDB if available
+                    if ('indexedDB' in window) {
+                        this.saveToIndexedDB(state);
+                    } else {
+                        // Fallback to localStorage
+                        localStorage.setItem(this.storageKey, JSON.stringify(state));
+                    }
+                } catch (error) {
+                    console.error('Error saving state:', error);
+                }
+            }
+
+            // Retrieve state from storage
+            getState() {
+                try {
+                    if ('indexedDB' in window) {
+                        return this.getFromIndexedDB();
+                    }
+                    
+                    const savedState = localStorage.getItem(this.storageKey);
+                    return savedState ? JSON.parse(savedState) : null;
+                } catch (error) {
+                    console.error('Error retrieving state:', error);
+                    return null;
+                }
+            }
+
+            // IndexedDB implementation (more robust for web apps)
+            saveToIndexedDB(state) {
+                const request = indexedDB.open('WordRecordingDB', 1);
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    db.createObjectStore('states', { keyPath: 'id' });
+                };
+
+                request.onsuccess = (event) => {
+                    const db = event.target.result;
+                    const transaction = db.transaction(['states'], 'readwrite');
+                    const store = transaction.objectStore('states');
+                    store.put({ id: this.storageKey, state });
+                };
+            }
+
+            // Retrieve from IndexedDB
+            getFromIndexedDB() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open('WordRecordingDB', 1);
+                    
+                    request.onsuccess = (event) => {
+                        const db = event.target.result;
+                        const transaction = db.transaction(['states'], 'readonly');
+                        const store = transaction.objectStore('states');
+                        const getRequest = store.get(this.storageKey);
+                        
+                        getRequest.onsuccess = () => {
+                            resolve(getRequest.result ? getRequest.result.state : null);
+                        };
+                    };
+                });
+            }
+        }
+
+        // Word Recording Tracker
+        class WordRecordingTracker {
+            constructor() {
+                this.stateManager = new PersistentStateManager();
+                this.words = [
+                    {
+                        word: "hello world",
+                        modes: ["fast", "normal", "slow", "soft", "comfortable"]
+                    }
+                ];
+                this.completedModes = {};
+                this.loadState();
+            }
+
+            loadState() {
+                const savedState = this.stateManager.getState();
+                if (savedState) {
+                    this.completedModes = savedState.completedModes || {};
+                }
+                this.renderWordBoxes();
+            }
+
+            saveState() {
+                this.stateManager.saveState({
+                    completedModes: this.completedModes
+                });
+            }
+
+            renderWordBoxes() {
+                const wordBoxesContainer = document.getElementById('word-boxes');
+                wordBoxesContainer.innerHTML = '';
+
+                const currentWord = this.words[0];
+                currentWord.modes.forEach((mode) => {
+                    const wordBox = document.createElement('div');
+                    wordBox.classList.add('word-box');
+                    
+                    const isCompleted = this.completedModes[currentWord.word]?.[mode];
+                    const isCurrentMode = this.getNextPendingMode() === mode;
+
+                    if (isCompleted) wordBox.classList.add('completed');
+                    if (isCurrentMode) wordBox.classList.add('current');
+
+                    wordBox.textContent = `${currentWord.word} - ${mode}`;
+                    wordBoxesContainer.appendChild(wordBox);
+                });
+            }
+
+            getNextPendingMode() {
+                const currentWord = this.words[0];
+                const wordKey = currentWord.word;
+
+                if (!this.completedModes[wordKey]) {
+                    this.completedModes[wordKey] = {};
+                }
+
+                for (let mode of currentWord.modes) {
+                    if (!this.completedModes[wordKey][mode]) {
+                        return mode;
+                    }
+                }
+
+                return null;
+            }
+
+            markModeComplete(mode) {
+                const currentWord = this.words[0];
+                const wordKey = currentWord.word;
+                
+                this.completedModes[wordKey][mode] = true;
+                this.saveState();
+                this.renderWordBoxes();
+            }
+        }
+
+        // Application Initialization
+        const tracker = new WordRecordingTracker();
+        let mediaRecorder;
+        let audioChunks = [];
+
+        // DOM Elements
+        const wordDisplay = document.getElementById('word-display');
+        const modeStatus = document.getElementById('mode-status');
+        const startRecordingBtn = document.getElementById('start-recording');
+        const stopRecordingBtn = document.getElementById('stop-recording');
+        const playRecordingBtn = document.getElementById('play-recording');
+        const saveRecordingBtn = document.getElementById('save-recording');
+
+        // Recording Functions
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            
+            audioChunks = [];
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                playRecordingBtn.disabled = false;
+                saveRecordingBtn.disabled = false;
+
+                playRecordingBtn.onclick = () => {
+                    const audio = new Audio(audioUrl);
+                    audio.play();
+                };
+            };
+
+            mediaRecorder.start();
+            startRecordingBtn.disabled = true;
+            stopRecordingBtn.disabled = false;
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+            startRecordingBtn.disabled = false;
+            stopRecordingBtn.disabled = true;
+        }
+
+        function saveRecording() {
+            const currentWord = tracker.words[0];
+            const currentMode = tracker.getNextPendingMode();
+            
+            // Mark mode as complete
+            tracker.markModeComplete(currentMode);
+            
+            // Reset UI
+            saveRecordingBtn.disabled = true;
+            playRecordingBtn.disabled = true;
+
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            const currentWord = tracker.words[0];
+            const nextMode = tracker.getNextPendingMode();
+
+            wordDisplay.textContent = `Word: ${currentWord.word}`;
+            modeStatus.textContent = nextMode 
+                ? `Current Mode: ${nextMode}` 
+                : 'All modes completed!';
+            
+            tracker.renderWordBoxes();
+        }
+
+        // Initialize event listeners
+        startRecordingBtn.addEventListener('click', startRecording);
+        stopRecordingBtn.addEventListener('click', stopRecording);
+        saveRecordingBtn.addEventListener('click', saveRecording);
+
+        // Initial display update
+        updateDisplay();
+    </script>
+</body>
+</html>

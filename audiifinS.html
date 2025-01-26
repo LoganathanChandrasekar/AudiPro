@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Word Recording App</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            padding: 20px; 
+        }
+        #word-boxes { 
+            display: flex; 
+            gap: 10px; 
+            margin-bottom: 20px; 
+        }
+        .word-box { 
+            border: 2px solid #ddd; 
+            padding: 10px; 
+            text-align: center; 
+            flex-grow: 1; 
+        }
+        .word-box.completed { 
+            background-color: #e6f3e6; 
+            border-color: green; 
+        }
+        .word-box.current { 
+            border-color: blue; 
+            font-weight: bold; 
+        }
+        .hidden { 
+            display: none; 
+        }
+        #audio-playback {
+            margin-top: 20px;
+        }
+        #audio-playback audio {
+            margin-bottom: 10px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>Word Recording Tracker</h1>
+        <div id="word-boxes"></div>
+        <div id="word-display"></div>
+        <div id="mode-status"></div>
+        <div id="recording-controls">
+            <button id="start-recording">Start Recording</button>
+            <button id="stop-recording" disabled>Stop Recording</button>
+            <button id="play-recording" disabled>Play Recording</button>
+            <button id="save-recording" disabled>Save Recording</button>
+            <button id="retry-recording" class="hidden">Retry Recording</button>
+        </div>
+        <div id="completion-message" class="hidden">
+            All modes completed!
+            <button id="next-word" class="hidden">Next Word</button>
+        </div>
+        <div id="audio-playback">
+            <h2>Recorded Audio Playback</h2>
+            <div id="audio-list"></div>
+        </div>
+    </div>
+
+    <script>
+        class WordRecordingTracker {
+            constructor() {
+                this.words = [
+                    {
+                        word: "hello world",
+                        modes: ["fast", "normal", "slow", "soft", "comfortable"]
+                    }
+                ];
+                this.completedModes = {};
+                this.modeAudioFiles = {};
+                this.loadState();
+            }
+
+            loadState() {
+                const savedState = JSON.parse(localStorage.getItem('wordRecordingState') || '{}');
+                this.completedModes = savedState.completedModes || {};
+                this.modeAudioFiles = savedState.modeAudioFiles || {};
+                this.renderWordBoxes();
+            }
+
+            saveState() {
+                localStorage.setItem('wordRecordingState', JSON.stringify({
+                    completedModes: this.completedModes,
+                    modeAudioFiles: this.modeAudioFiles
+                }));
+            }
+
+            renderWordBoxes() {
+                const wordBoxesContainer = document.getElementById('word-boxes');
+                wordBoxesContainer.innerHTML = '';
+
+                const currentWord = this.words[0];
+                currentWord.modes.forEach((mode) => {
+                    const wordBox = document.createElement('div');
+                    wordBox.classList.add('word-box');
+                    
+                    const isCompleted = this.completedModes[currentWord.word]?.[mode];
+                    const isCurrentMode = this.getNextPendingMode() === mode;
+
+                    if (isCompleted) wordBox.classList.add('completed');
+                    if (isCurrentMode) wordBox.classList.add('current');
+
+                    wordBox.textContent = `${currentWord.word} - ${mode}`;
+                    wordBoxesContainer.appendChild(wordBox);
+                });
+            }
+
+            getNextPendingMode() {
+                const currentWord = this.words[0];
+                const wordKey = currentWord.word;
+
+                if (!this.completedModes[wordKey]) {
+                    this.completedModes[wordKey] = {};
+                }
+
+                for (let mode of currentWord.modes) {
+                    if (!this.completedModes[wordKey][mode]) {
+                        return mode;
+                    }
+                }
+
+                return null;
+            }
+
+            markModeComplete(mode, audioBlob) {
+                const currentWord = this.words[0];
+                const wordKey = currentWord.word;
+                
+                if (audioBlob) {
+                    // Save audio file
+                    const fileName = `${wordKey}_${mode}.wav`;
+                    const audioFile = new File([audioBlob], fileName, { type: 'audio/wav' });
+                    
+                    // Store file in modeAudioFiles
+                    if (!this.modeAudioFiles[wordKey]) {
+                        this.modeAudioFiles[wordKey] = {};
+                    }
+                    this.modeAudioFiles[wordKey][mode] = URL.createObjectURL(audioFile);
+
+                    // Mark mode as completed
+                    this.completedModes[wordKey][mode] = true;
+                    this.saveState();
+                    this.renderWordBoxes();
+                    return true;
+                }
+                return false;
+            }
+
+            isAllModesComplete() {
+                const currentWord = this.words[0];
+                return currentWord.modes.every(
+                    mode => this.completedModes[currentWord.word]?.[mode]
+                );
+            }
+
+            resetRecording() {
+                const currentWord = this.words[0];
+                this.completedModes = {};
+                this.modeAudioFiles = {};
+                localStorage.removeItem('wordRecordingState');
+                this.renderWordBoxes();
+            }
+        }
+
+        // Application Initialization
+        const tracker = new WordRecordingTracker();
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioUrl = null;
+
+        // DOM Elements
+        const wordDisplay = document.getElementById('word-display');
+        const modeStatus = document.getElementById('mode-status');
+        const startRecordingBtn = document.getElementById('start-recording');
+        const stopRecordingBtn = document.getElementById('stop-recording');
+        const playRecordingBtn = document.getElementById('play-recording');
+        const saveRecordingBtn = document.getElementById('save-recording');
+        const retryRecordingBtn = document.getElementById('retry-recording');
+        const recordingControls = document.getElementById('recording-controls');
+        const completionMessage = document.getElementById('completion-message');
+        const nextWordBtn = document.getElementById('next-word');
+        const audioListContainer = document.getElementById('audio-list');
+
+        // Recording Functions
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            
+            audioChunks = [];
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                if (audioChunks.length > 0) {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    playRecordingBtn.disabled = false;
+                    saveRecordingBtn.disabled = false;
+                    retryRecordingBtn.classList.remove('hidden');
+                    startRecordingBtn.disabled = true;
+                    stopRecordingBtn.disabled = true;
+                }
+            };
+
+            mediaRecorder.start();
+            startRecordingBtn.disabled = true;
+            stopRecordingBtn.disabled = false;
+            
+            // Reset play button if no recording exists
+            playRecordingBtn.disabled = true;
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+            startRecordingBtn.disabled = false;
+            stopRecordingBtn.disabled = true;
+        }
+
+        function playRecording() {
+            if (audioUrl) {
+                const audio = new Audio(audioUrl);
+                audio.play();
+            }
+        }
+
+        function displayRecordedAudios() {
+            const currentWord = tracker.words[0];
+            const wordKey = currentWord.word;
+            
+            // Clear previous audio list
+            audioListContainer.innerHTML = '';
+
+            // If no recordings exist, show a message
+            if (!tracker.modeAudioFiles[wordKey]) {
+                audioListContainer.innerHTML = 'No recordings found.';
+                return;
+            }
+
+            // Create an audio player for each mode's recording
+            currentWord.modes.forEach(mode => {
+                const audioUrl = tracker.modeAudioFiles[wordKey]?.[mode];
+                
+                if (audioUrl) {
+                    // Create a container for each audio
+                    const audioContainer = document.createElement('div');
+                    
+                    // Create mode label
+                    const modeLabel = document.createElement('strong');
+                    modeLabel.textContent = `${mode} mode: `;
+                    
+                    // Create audio element
+                    const audioElement = document.createElement('audio');
+                    audioElement.src = audioUrl;
+                    audioElement.controls = true;
+                    
+                    // Append elements
+                    audioContainer.appendChild(modeLabel);
+                    audioContainer.appendChild(audioElement);
+                    
+                    audioListContainer.appendChild(audioContainer);
+                }
+            });
+        }
+
+        function saveRecording() {
+            const currentWord = tracker.words[0];
+            const currentMode = tracker.getNextPendingMode();
+            
+            // Only allow save if recording exists
+            if (audioChunks.length > 0) {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                const modeCompleted = tracker.markModeComplete(currentMode, audioBlob);
+                
+                if (modeCompleted) {
+                    audioUrl = null;
+                    audioChunks = [];
+                    playRecordingBtn.disabled = true;
+                    saveRecordingBtn.disabled = true;
+                    retryRecordingBtn.classList.add('hidden');
+                    startRecordingBtn.disabled = false;
+
+                    if (tracker.isAllModesComplete()) {
+                        recordingControls.classList.add('hidden');
+                        completionMessage.classList.remove('hidden');
+                        nextWordBtn.classList.remove('hidden');
+                        
+                        // Show all recordings when modes are complete
+                        displayRecordedAudios();
+                    }
+
+                    updateDisplay();
+                }
+            }
+        }
+
+        function retryRecording() {
+            // Reset recording UI
+            audioUrl = null;
+            audioChunks = [];
+            playRecordingBtn.disabled = true;
+            saveRecordingBtn.disabled = true;
+            retryRecordingBtn.classList.add('hidden');
+            startRecordingBtn.disabled = false;
+        }
+
+        function updateDisplay() {
+            const currentWord = tracker.words[0];
+            const nextMode = tracker.getNextPendingMode();
+
+            wordDisplay.textContent = `Word: ${currentWord.word}`;
+            modeStatus.textContent = nextMode 
+                ? `Current Mode: ${nextMode}` 
+                : 'All modes completed!';
+            
+            tracker.renderWordBoxes();
+        }
+
+        // Event Listeners
+        startRecordingBtn.addEventListener('click', startRecording);
+        stopRecordingBtn.addEventListener('click', stopRecording);
+        playRecordingBtn.addEventListener('click', playRecording);
+        saveRecordingBtn.addEventListener('click', saveRecording);
+        retryRecordingBtn.addEventListener('click', retryRecording);
+        nextWordBtn.addEventListener('click', () => {
+            tracker.resetRecording();
+            recordingControls.classList.remove('hidden');
+            completionMessage.classList.add('hidden');
+            nextWordBtn.classList.add('hidden');
+            updateDisplay();
+            
+            // Reset audio playback
+            audioListContainer.innerHTML = '';
+        });
+
+        // Initial display update
+        updateDisplay();
+    </script>
+</body>
+</html>
