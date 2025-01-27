@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Word Recording App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            max-width: 1400px;
+            margin: 0 auto;
+            gap: 30px;
+        }
+        .form-section {
+            width: 300px;
+        }
+        .recording-section {
+            flex: 1;
+            min-width: 500px;
+        }
+        .instruction-section {
+            width: 300px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: normal;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+        .section-title {
+            font-size: 14px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .recording-header {
+            color: #666;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .text-box {
+            font-size: 24px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+        }
+        .text-content {
+            color: #333;
+        }
+        .mode-indicator {
+            color: #666;
+            font-style: italic;
+            margin-left: 10px;
+        }
+        .visualization {
+            height: 150px;
+            background: #f0f0f0;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .timer {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 18px;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button.start { background-color: #007bff; color: white; }
+        button.stop { background-color: #dc3545; color: white; }
+        button.retry { background-color: #007bff; color: white; }
+        button.send { background-color: #17a2b8; color: white; }
+        button.play { background-color: #28a745; color: white; }
+        .hidden { display: none; }
+        .audio-player { width: 100%; margin: 10px 0; }
+        
+        /* New styles for instruction section */
+        .instruction-section {
+            /* background: #f8f9fa; */
+            padding: 20px;
+        }
+        .instruction-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            /* color: #333; */
+        }
+        .sample-audio {
+            margin-top: 20px;
+        }
+        .sample-audio h3 {
+            font-size: 16px;
+             margin-bottom: 15px;
+        }
+        .sample-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            /* background: white; */
+        }
+        .sample-item p {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+          }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Form Section -->
+        <div class="form-section">
+            <div class="section-title">Please complete your info:</div>
+            <div class="form-group">
+                <label>Speaker Id</label>
+                <input type="text" id="speaker-id" value="testers_00005">
+            </div>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="name" value="Logan">
+            </div>
+            <div class="form-group">
+                <label>Gender</label>
+                <select id="gender">
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Age</label>
+                <input type="number" id="age" value="24">
+            </div>
+            <div class="form-group">
+                <label>Country</label>
+                <select id="country">
+                    <option value="UK">UK</option>
+                    <option value="US">US</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Center Recording Section -->
+        <div class="recording-section">
+            <div class="recording-header">Text 2 of 48 - Please Read the sentence slow and record the following sentence</div>
+            <div class="text-box">
+                <span id="text-content" class="text-content">Previous Track</span>
+                <span id="mode-indicator" class="mode-indicator">-slow</span>
+            </div>
+            
+            <div id="visualization" class="visualization hidden"></div>
+            <div id="timer" class="timer hidden">00:00</div>
+            <audio id="audio-player" class="audio-player hidden" controls></audio>
+            
+            <div id="controls">
+                <button id="start-recording" class="start">Start Recording</button>
+                <button id="stop-recording" class="stop hidden">Stop Recording</button>
+                <button id="play-recording" class="play hidden">Play Recording</button>
+                <button id="retry-recording" class="retry hidden">Record Again</button>
+                <button id="send-recording" class="send hidden">Send Audio</button>
+            </div>
+            <div id="previous-recordings" class="hidden">
+                <h3>Previous Recordings</h3>
+                <div id="recordings-list"></div>
+            </div>
+        </div>
+
+        <!-- Right Instruction Section -->
+        <div class="instruction-section">
+            <div class="instruction-title">Instruction</div>
+            <div class="sample-audio">
+                <h3>Sample Audio Files</h3>
+                <div class="sample-item">
+                    <p>Sample 1 - Reading Fast</p>
+                    <audio controls>
+                        <source src="/api/placeholder-audio" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+                <div class="sample-item">
+                    <p>Sample 1 - Reading Normal</p>
+                    <audio controls>
+                        <source src="/api/placeholder-audio" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+                <div class="sample-item">
+                    <p>Sample 1 - Reading Slow</p>
+                    <audio controls>
+                        <source src="/api/placeholder-audio" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        class RecordingApp {
+            constructor() {
+                this.words = ["Hey Eufy", "Hello", "Hello all"];
+                this.modes = ["slow", "normal", "fast", "soft", "comfortable"];
+                this.currentWordIndex = 0;
+                this.loadState();
+                this.initializeUI();
+                this.updateDisplay();
+            }
+
+            loadState() {
+                const savedState = localStorage.getItem('recordingAppState');
+                if (savedState) {
+                    const state = JSON.parse(savedState);
+                    this.currentWordIndex = state.currentWordIndex || 0;
+                    this.currentModeIndex = state.currentModeIndex || 0;
+                    this.recordings = state.recordings || {};
+                    
+                    // Load user info
+                    const userInfo = localStorage.getItem('userInfo');
+                    if (userInfo) {
+                        const info = JSON.parse(userInfo);
+                        document.getElementById('speaker-id').value = info.speakerId || '';
+                        document.getElementById('name').value = info.name || '';
+                        document.getElementById('gender').value = info.gender || 'Male';
+                        document.getElementById('age').value = info.age || '';
+                        document.getElementById('country').value = info.country || 'UK';
+                    }
+                } else {
+                    this.currentWordIndex = 0;
+                    this.currentModeIndex = 0;
+                    this.recordings = {};
+                }
+            }
+
+            saveState() {
+                const state = {
+                    currentWordIndex: this.currentWordIndex,
+                    currentModeIndex: this.currentModeIndex,
+                    recordings: this.recordings
+                };
+                localStorage.setItem('recordingAppState', JSON.stringify(state));
+
+                // Save user info
+                const userInfo = {
+                    speakerId: document.getElementById('speaker-id').value,
+                    name: document.getElementById('name').value,
+                    gender: document.getElementById('gender').value,
+                    age: document.getElementById('age').value,
+                    country: document.getElementById('country').value
+                };
+                localStorage.setItem('userInfo', JSON.stringify(userInfo));
+            }
+
+            getSequenceId() {
+                return `G${(this.currentWordIndex + 1).toString().padStart(4, '0')}`;
+            }
+
+            getFileName() {
+                const speakerId = document.getElementById('speaker-id').value;
+                const sequenceId = this.getSequenceId();
+                const mode = this.modes[this.currentModeIndex];
+                const gender = document.getElementById('gender').value;
+                return `${speakerId}_${sequenceId}_${mode}_${gender}`;
+            }
+
+            // Rest of the original methods remain unchanged
+            initializeUI() {
+                this.elements = {
+                    textContent: document.getElementById('text-content'),
+                    modeIndicator: document.getElementById('mode-indicator'),
+                    visualization: document.getElementById('visualization'),
+                    timer: document.getElementById('timer'),
+                    startBtn: document.getElementById('start-recording'),
+                    stopBtn: document.getElementById('stop-recording'),
+                    playBtn: document.getElementById('play-recording'),
+                    retryBtn: document.getElementById('retry-recording'),
+                    sendBtn: document.getElementById('send-recording'),
+                    audioPlayer: document.getElementById('audio-player'),
+                    previousRecordings: document.getElementById('previous-recordings'),
+                    recordingsList: document.getElementById('recordings-list')
+                };
+
+                this.elements.startBtn.addEventListener('click', () => this.startRecording());
+                this.elements.stopBtn.addEventListener('click', () => this.stopRecording());
+                this.elements.playBtn.addEventListener('click', () => this.playRecording());
+                this.elements.retryBtn.addEventListener('click', () => this.retryRecording());
+                this.elements.sendBtn.addEventListener('click', () => this.sendRecording());
+                
+                this.updatePreviousRecordings();
+            }
+
+            updateDisplay() {
+                this.elements.textContent.textContent = this.words[this.currentWordIndex];
+                this.elements.modeIndicator.textContent = `-${this.modes[this.currentModeIndex]}`;
+            }
+
+            async startRecording() {
+                const speakerId = document.getElementById('speaker-id').value;
+                if (!speakerId) {
+                    alert('Please enter your Speaker ID before recording');
+                    return;
+                }
+
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.mediaRecorder = new MediaRecorder(stream);
+                    this.audioChunks = [];
+                    
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        this.audioChunks.push(event.data);
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                        this.currentRecording = URL.createObjectURL(audioBlob);
+                        this.elements.audioPlayer.src = this.currentRecording;
+                    };
+
+                    this.elements.startBtn.classList.add('hidden');
+                    this.elements.stopBtn.classList.remove('hidden');
+                    this.elements.visualization.classList.remove('hidden');
+                    this.elements.timer.classList.remove('hidden');
+                    this.elements.audioPlayer.classList.add('hidden');
+                    this.elements.playBtn.classList.add('hidden');
+                    
+                    this.mediaRecorder.start();
+                    this.startTimer();
+                } catch (error) {
+                    console.error('Error accessing microphone:', error);
+                    alert('Please ensure microphone permissions are granted.');
+                }
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                    this.stopTimer();
+                    
+                    this.elements.stopBtn.classList.add('hidden');
+                    this.elements.audioPlayer.classList.remove('hidden');
+                    this.elements.playBtn.classList.remove('hidden');
+                    this.elements.retryBtn.classList.remove('hidden');
+                    this.elements.sendBtn.classList.remove('hidden');
+                }
+            }
+
+            playRecording() {
+                if (this.currentRecording) {
+                    this.elements.audioPlayer.play();
+                }
+            }
+
+            retryRecording() {
+                this.currentRecording = null;
+                this.audioChunks = [];
+                
+                this.elements.retryBtn.classList.add('hidden');
+                this.elements.sendBtn.classList.add('hidden');
+                this.elements.playBtn.classList.add('hidden');
+                this.elements.audioPlayer.classList.add('hidden');
+                this.elements.startBtn.classList.remove('hidden');
+                this.elements.visualization.classList.add('hidden');
+                this.elements.timer.classList.add('hidden');
+                this.elements.timer.textContent = '00:00';
+            }
+
+            async sendRecording() {
+                if (this.currentRecording && this.audioChunks.length > 0) {
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                    const base64Audio = await this.blobToBase64(audioBlob);
+                    
+                    const filename = this.getFileName();
+                    this.recordings[filename] = base64Audio;
+                    
+                    this.currentModeIndex++;
+                    
+                    if (this.currentModeIndex >= this.modes.length) {
+                        this.currentModeIndex = 0;
+                        this.currentWordIndex++;
+                        
+                        if (this.currentWordIndex >= this.words.length) {
+                            alert('All words and modes completed!');
+                            this.currentWordIndex = 0;
+                        }
+                    }
+                    
+                    this.saveState();
+                    this.updatePreviousRecordings();
+                    
+                    this.retryRecording();
+                    this.updateDisplay();
+                }
+            }
+
+            async blobToBase64(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            startTimer() {
+                let seconds = 0;
+                this.timer = setInterval(() => {
+                    seconds++;
+                    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+                    const secs = (seconds % 60).toString().padStart(2, '0');
+                    this.elements.timer.textContent = `${mins}:${secs}`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timer) {
+                    clearInterval(this.timer);
+                    this.timer = null;
+                }
+            }
+
+            updatePreviousRecordings() {
+                if (Object.keys(this.recordings).length > 0) {
+                    this.elements.previousRecordings.classList.remove('hidden');
+                    this.elements.recordingsList.innerHTML = '';
+                    
+                    for (const filename in this.recordings) {
+                        const recordingDiv = document.createElement('div');
+                        recordingDiv.className = 'recording-entry';
+                        
+                        const audio = document.createElement('audio');
+                        audio.controls = true;
+                        audio.src = this.recordings[filename];
+                        
+                        recordingDiv.innerHTML = `<p>${filename}</p>`;
+                        recordingDiv.appendChild(audio);
+                        
+                        this.elements.recordingsList.appendChild(recordingDiv);
+                    }
+                }
+            }
+        }
+
+        // Initialize the application
+        const app = new RecordingApp();
+    </script>
+</body>
+</html>
