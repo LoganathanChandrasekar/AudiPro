@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Word Recording App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .text-box {
+            font-size: 24px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+        }
+        .text-content {
+            color: #333;
+        }
+        .mode-indicator {
+            color: #666;
+            font-style: italic;
+            margin-left: 10px;
+        }
+        .visualization {
+            height: 150px;
+            background: #f0f0f0;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .timer {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 18px;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button.start { background-color: #007bff; color: white; }
+        button.stop { background-color: #dc3545; color: white; }
+        button.retry { background-color: #007bff; color: white; }
+        button.send { background-color: #17a2b8; color: white; }
+        button.play { background-color: #28a745; color: white; }
+        .hidden { display: none; }
+        .audio-player { width: 100%; margin: 10px 0; }
+        .previous-recordings {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .recording-entry {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="text-box">
+            <span id="text-content" class="text-content"></span>
+            <span id="mode-indicator" class="mode-indicator"></span>
+        </div>
+        
+        <div id="visualization" class="visualization hidden"></div>
+        <div id="timer" class="timer hidden">00:00</div>
+        <audio id="audio-player" class="audio-player hidden" controls></audio>
+        
+        <div id="controls">
+            <button id="start-recording" class="start">Start Recording</button>
+            <button id="stop-recording" class="stop hidden">Stop Recording</button>
+            <button id="play-recording" class="play hidden">Play Recording</button>
+            <button id="retry-recording" class="retry hidden">Record Again</button>
+            <button id="send-recording" class="send hidden">Send Audio</button>
+        </div>
+
+        <div id="previous-recordings" class="previous-recordings hidden">
+            <h3>Previous Recordings</h3>
+            <div id="recordings-list"></div>
+        </div>
+    </div>
+
+    <script>
+        class RecordingApp {
+            constructor() {
+                this.words = ["Hey Eufy", "Hello", "Hello all"];
+                this.modes = ["slow", "normal", "fast", "soft", "comfortable"];
+                this.currentWordIndex = 0;
+                this.loadState();
+                this.initializeUI();
+                this.updateDisplay();
+            }
+
+            loadState() {
+                const savedState = localStorage.getItem('recordingAppState');
+                if (savedState) {
+                    const state = JSON.parse(savedState);
+                    this.currentWordIndex = state.currentWordIndex || 0;
+                    this.currentModeIndex = state.currentModeIndex || 0;
+                    this.recordings = state.recordings || {};
+                } else {
+                    this.currentWordIndex = 0;
+                    this.currentModeIndex = 0;
+                    this.recordings = {};
+                }
+            }
+
+            saveState() {
+                const state = {
+                    currentWordIndex: this.currentWordIndex,
+                    currentModeIndex: this.currentModeIndex,
+                    recordings: this.recordings
+                };
+                localStorage.setItem('recordingAppState', JSON.stringify(state));
+            }
+
+            initializeUI() {
+                this.elements = {
+                    textContent: document.getElementById('text-content'),
+                    modeIndicator: document.getElementById('mode-indicator'),
+                    visualization: document.getElementById('visualization'),
+                    timer: document.getElementById('timer'),
+                    startBtn: document.getElementById('start-recording'),
+                    stopBtn: document.getElementById('stop-recording'),
+                    playBtn: document.getElementById('play-recording'),
+                    retryBtn: document.getElementById('retry-recording'),
+                    sendBtn: document.getElementById('send-recording'),
+                    audioPlayer: document.getElementById('audio-player'),
+                    previousRecordings: document.getElementById('previous-recordings'),
+                    recordingsList: document.getElementById('recordings-list')
+                };
+
+                this.elements.startBtn.addEventListener('click', () => this.startRecording());
+                this.elements.stopBtn.addEventListener('click', () => this.stopRecording());
+                this.elements.playBtn.addEventListener('click', () => this.playRecording());
+                this.elements.retryBtn.addEventListener('click', () => this.retryRecording());
+                this.elements.sendBtn.addEventListener('click', () => this.sendRecording());
+                
+                this.updatePreviousRecordings();
+            }
+
+            updateDisplay() {
+                this.elements.textContent.textContent = this.words[this.currentWordIndex];
+                this.elements.modeIndicator.textContent = `-${this.modes[this.currentModeIndex]}`;
+            }
+
+            updatePreviousRecordings() {
+                if (Object.keys(this.recordings).length > 0) {
+                    this.elements.previousRecordings.classList.remove('hidden');
+                    this.elements.recordingsList.innerHTML = '';
+                    
+                    for (const word in this.recordings) {
+                        const wordDiv = document.createElement('div');
+                        wordDiv.className = 'recording-entry';
+                        wordDiv.innerHTML = `<h4>${word}</h4>`;
+                        
+                        for (const mode in this.recordings[word]) {
+                            const audio = document.createElement('audio');
+                            audio.controls = true;
+                            audio.src = this.recordings[word][mode];
+                            
+                            const modeDiv = document.createElement('div');
+                            modeDiv.innerHTML = `<p>${mode}:</p>`;
+                            modeDiv.appendChild(audio);
+                            
+                            wordDiv.appendChild(modeDiv);
+                        }
+                        
+                        this.elements.recordingsList.appendChild(wordDiv);
+                    }
+                }
+            }
+
+            async startRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.mediaRecorder = new MediaRecorder(stream);
+                    this.audioChunks = [];
+                    
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        this.audioChunks.push(event.data);
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                        this.currentRecording = URL.createObjectURL(audioBlob);
+                        this.elements.audioPlayer.src = this.currentRecording;
+                    };
+
+                    this.elements.startBtn.classList.add('hidden');
+                    this.elements.stopBtn.classList.remove('hidden');
+                    this.elements.visualization.classList.remove('hidden');
+                    this.elements.timer.classList.remove('hidden');
+                    this.elements.audioPlayer.classList.add('hidden');
+                    this.elements.playBtn.classList.add('hidden');
+                    
+                    this.mediaRecorder.start();
+                    this.startTimer();
+                } catch (error) {
+                    console.error('Error accessing microphone:', error);
+                    alert('Please ensure microphone permissions are granted.');
+                }
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                    this.stopTimer();
+                    
+                    this.elements.stopBtn.classList.add('hidden');
+                    this.elements.audioPlayer.classList.remove('hidden');
+                    this.elements.playBtn.classList.remove('hidden');
+                    this.elements.retryBtn.classList.remove('hidden');
+                    this.elements.sendBtn.classList.remove('hidden');
+                }
+            }
+
+            playRecording() {
+                if (this.currentRecording) {
+                    this.elements.audioPlayer.play();
+                }
+            }
+
+            retryRecording() {
+                this.currentRecording = null;
+                this.audioChunks = [];
+                
+                this.elements.retryBtn.classList.add('hidden');
+                this.elements.sendBtn.classList.add('hidden');
+                this.elements.playBtn.classList.add('hidden');
+                this.elements.audioPlayer.classList.add('hidden');
+                this.elements.startBtn.classList.remove('hidden');
+                this.elements.visualization.classList.add('hidden');
+                this.elements.timer.classList.add('hidden');
+                this.elements.timer.textContent = '00:00';
+            }
+
+            async sendRecording() {
+                if (this.currentRecording && this.audioChunks.length > 0) {
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                    const base64Audio = await this.blobToBase64(audioBlob);
+                    
+                    // Initialize word recordings if not exists
+                    if (!this.recordings[this.words[this.currentWordIndex]]) {
+                        this.recordings[this.words[this.currentWordIndex]] = {};
+                    }
+                    
+                    // Save recording for current word and mode
+                    this.recordings[this.words[this.currentWordIndex]][this.modes[this.currentModeIndex]] = base64Audio;
+                    this.currentModeIndex++;
+                    
+                    if (this.currentModeIndex >= this.modes.length) {
+                        // All modes completed for current word
+                        this.currentModeIndex = 0;
+                        this.currentWordIndex++;
+                        
+                        if (this.currentWordIndex >= this.words.length) {
+                            alert('All words and modes completed!');
+                            this.currentWordIndex = 0;
+                        }
+                    }
+                    
+                    this.saveState();
+                    this.updatePreviousRecordings();
+                    
+                    // Reset for next recording
+                    this.currentRecording = null;
+                    this.audioChunks = [];
+                    
+                    // Update UI
+                    this.elements.retryBtn.classList.add('hidden');
+                    this.elements.sendBtn.classList.add('hidden');
+                    this.elements.playBtn.classList.add('hidden');
+                    this.elements.audioPlayer.classList.add('hidden');
+                    this.elements.startBtn.classList.remove('hidden');
+                    this.elements.visualization.classList.add('hidden');
+                    this.elements.timer.classList.add('hidden');
+                    this.elements.timer.textContent = '00:00';
+                    
+                    this.updateDisplay();
+                }
+            }
+
+            async blobToBase64(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            startTimer() {
+                let seconds = 0;
+                this.timer = setInterval(() => {
+                    seconds++;
+                    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+                    const secs = (seconds % 60).toString().padStart(2, '0');
+                    this.elements.timer.textContent = `${mins}:${secs}`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timer) {
+                    clearInterval(this.timer);
+                    this.timer = null;
+                }
+            }
+        }
+
+        // Initialize the application
+        const app = new RecordingApp();
+    </script>
+</body>
+</html>

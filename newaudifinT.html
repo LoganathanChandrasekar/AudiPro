@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Word Recording App</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            padding: 20px; 
+        }
+        .text-display {
+            font-size: 24px;
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .mode-indicator {
+            color: #666;
+            font-style: italic;
+            margin-left: 10px;
+        }
+        .progress-bar {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .progress-step {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .progress-step.completed {
+            background-color: #e6f3e6;
+            border-color: green;
+        }
+        .progress-step.current {
+            border-color: blue;
+            font-weight: bold;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button.retry {
+            background-color: #dc3545;
+        }
+        .recordings {
+            margin-top: 20px;
+        }
+        .recording-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>Text Recording</h1>
+        <div class="text-display">
+            <span id="current-text"></span>
+            <span id="mode-indicator" class="mode-indicator"></span>
+        </div>
+        
+        <div id="progress-bar" class="progress-bar"></div>
+        
+        <div class="controls">
+            <button id="start-recording">Start Recording</button>
+            <button id="stop-recording" disabled>Stop Recording</button>
+            <button id="play-recording" disabled>Play Recording</button>
+            <button id="save-recording" disabled>Save & Continue</button>
+            <button id="retry-recording" class="retry hidden">Retry</button>
+        </div>
+
+        <div class="recordings">
+            <button id="toggle-recordings">Show Previous Recordings</button>
+            <div id="recordings-list" class="hidden"></div>
+        </div>
+
+        <div id="completion-message" class="hidden">
+            <h2>All recordings completed!</h2>
+            <button id="reset">Start Over</button>
+        </div>
+    </div>
+
+    <script>
+        class TextRecorder {
+            constructor() {
+                this.text = "Hey Eufy";
+                this.modes = ["slow", "normal", "fast", "soft", "comfortable"];
+                this.currentModeIndex = 0;
+                this.recordings = {};
+                this.loadState();
+                
+                // Initialize UI elements
+                this.initializeUI();
+                this.updateUI();
+            }
+
+            initializeUI() {
+                this.elements = {
+                    textDisplay: document.getElementById('current-text'),
+                    modeIndicator: document.getElementById('mode-indicator'),
+                    progressBar: document.getElementById('progress-bar'),
+                    startBtn: document.getElementById('start-recording'),
+                    stopBtn: document.getElementById('stop-recording'),
+                    playBtn: document.getElementById('play-recording'),
+                    saveBtn: document.getElementById('save-recording'),
+                    retryBtn: document.getElementById('retry-recording'),
+                    toggleRecordingsBtn: document.getElementById('toggle-recordings'),
+                    recordingsList: document.getElementById('recordings-list'),
+                    completionMessage: document.getElementById('completion-message'),
+                    resetBtn: document.getElementById('reset')
+                };
+
+                // Add event listeners
+                this.elements.startBtn.addEventListener('click', () => this.startRecording());
+                this.elements.stopBtn.addEventListener('click', () => this.stopRecording());
+                this.elements.playBtn.addEventListener('click', () => this.playRecording());
+                this.elements.saveBtn.addEventListener('click', () => this.saveRecording());
+                this.elements.retryBtn.addEventListener('click', () => this.retryRecording());
+                this.elements.toggleRecordingsBtn.addEventListener('click', () => this.toggleRecordings());
+                this.elements.resetBtn.addEventListener('click', () => this.reset());
+            }
+
+            loadState() {
+                const savedState = localStorage.getItem('textRecorderState');
+                if (savedState) {
+                    const state = JSON.parse(savedState);
+                    this.recordings = state.recordings || {};
+                    this.currentModeIndex = state.currentModeIndex || 0;
+                }
+            }
+
+            saveState() {
+                localStorage.setItem('textRecorderState', JSON.stringify({
+                    recordings: this.recordings,
+                    currentModeIndex: this.currentModeIndex
+                }));
+            }
+
+            updateUI() {
+                // Update text and mode display
+                this.elements.textDisplay.textContent = this.text;
+                this.elements.modeIndicator.textContent = `(${this.getCurrentMode()})`;
+
+                // Update progress bar
+                this.elements.progressBar.innerHTML = '';
+                this.modes.forEach((mode, index) => {
+                    const step = document.createElement('div');
+                    step.className = 'progress-step';
+                    if (this.recordings[mode]) step.classList.add('completed');
+                    if (index === this.currentModeIndex) step.classList.add('current');
+                    step.textContent = mode;
+                    this.elements.progressBar.appendChild(step);
+                });
+
+                // Update completion message
+                if (this.isComplete()) {
+                    this.elements.completionMessage.classList.remove('hidden');
+                    this.elements.startBtn.disabled = true;
+                } else {
+                    this.elements.completionMessage.classList.add('hidden');
+                    this.elements.startBtn.disabled = false;
+                }
+            }
+
+            getCurrentMode() {
+                return this.modes[this.currentModeIndex];
+            }
+
+            isComplete() {
+                return this.currentModeIndex >= this.modes.length;
+            }
+
+            async startRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.mediaRecorder = new MediaRecorder(stream);
+                    this.audioChunks = [];
+
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        this.audioChunks.push(event.data);
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                        this.currentRecording = URL.createObjectURL(audioBlob);
+                        this.elements.playBtn.disabled = false;
+                        this.elements.saveBtn.disabled = false;
+                        this.elements.retryBtn.classList.remove('hidden');
+                    };
+
+                    this.mediaRecorder.start();
+                    this.elements.startBtn.disabled = true;
+                    this.elements.stopBtn.disabled = false;
+                    this.elements.playBtn.disabled = true;
+                    this.elements.saveBtn.disabled = true;
+                } catch (error) {
+                    console.error('Error accessing microphone:', error);
+                    alert('Error accessing microphone. Please ensure microphone permissions are granted.');
+                }
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                    this.elements.stopBtn.disabled = true;
+                    this.elements.startBtn.disabled = false;
+                }
+            }
+
+            playRecording() {
+                if (this.currentRecording) {
+                    const audio = new Audio(this.currentRecording);
+                    audio.play();
+                }
+            }
+
+            async saveRecording() {
+                const mode = this.getCurrentMode();
+                if (this.currentRecording) {
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                    const base64Audio = await this.blobToBase64(audioBlob);
+                    this.recordings[mode] = base64Audio;
+                    this.currentModeIndex++;
+                    this.saveState();
+                    
+                    // Reset recording state
+                    this.currentRecording = null;
+                    this.audioChunks = [];
+                    this.elements.playBtn.disabled = true;
+                    this.elements.saveBtn.disabled = true;
+                    this.elements.retryBtn.classList.add('hidden');
+                    
+                    this.updateUI();
+                }
+            }
+
+            retryRecording() {
+                this.currentRecording = null;
+                this.audioChunks = [];
+                this.elements.playBtn.disabled = true;
+                this.elements.saveBtn.disabled = true;
+                this.elements.retryBtn.classList.add('hidden');
+                this.elements.startBtn.disabled = false;
+            }
+
+            toggleRecordings() {
+                const isHidden = this.elements.recordingsList.classList.contains('hidden');
+                if (isHidden) {
+                    this.showRecordings();
+                    this.elements.toggleRecordingsBtn.textContent = 'Hide Previous Recordings';
+                } else {
+                    this.elements.recordingsList.classList.add('hidden');
+                    this.elements.toggleRecordingsBtn.textContent = 'Show Previous Recordings';
+                }
+            }
+
+            showRecordings() {
+                this.elements.recordingsList.innerHTML = '';
+                this.elements.recordingsList.classList.remove('hidden');
+
+                Object.entries(this.recordings).forEach(([mode, base64Audio]) => {
+                    const container = document.createElement('div');
+                    container.className = 'recording-item';
+
+                    const label = document.createElement('div');
+                    label.textContent = `${this.text} (${mode})`;
+
+                    const audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = base64Audio;
+
+                    container.appendChild(label);
+                    container.appendChild(audio);
+                    this.elements.recordingsList.appendChild(container);
+                });
+
+                if (Object.keys(this.recordings).length === 0) {
+                    this.elements.recordingsList.textContent = 'No recordings yet';
+                }
+            }
+
+            reset() {
+                this.currentModeIndex = 0;
+                this.recordings = {};
+                this.currentRecording = null;
+                this.audioChunks = [];
+                localStorage.removeItem('textRecorderState');
+                this.updateUI();
+                this.elements.recordingsList.innerHTML = '';
+                this.elements.recordingsList.classList.add('hidden');
+                this.elements.toggleRecordingsBtn.textContent = 'Show Previous Recordings';
+            }
+
+            async blobToBase64(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+        }
+
+        // Initialize the application
+        const app = new TextRecorder();
+    </script>
+</body>
+</html>
